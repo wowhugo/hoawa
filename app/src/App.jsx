@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import './App.css'
 
-const EMOJIS = ['😄', '🎉', '✨', '💫', '🌟']
+const EMOJIS = ['😄', '🎉', '✨', '💫', '🌟', '🥳', '💖', '🌈', '🎀', '🍭', '⭐', '💕', '🎊', '🦋', '🌸']
 const BASE = import.meta.env.BASE_URL
 const AUDIO_FILES = [`${BASE}hoawa1.mp3`, `${BASE}hoawa2.mp3`, `${BASE}hoawa3.mp3`, `${BASE}hoawa4.mp3`, `${BASE}hoawa5.mp3`]
 const FLOAT_COLORS = ['#ff6b9d', '#ff8a5c', '#ffd93d', '#6bcfff', '#b784ff', '#ff6b6b']
@@ -48,6 +48,7 @@ function App() {
   const [floatingTexts, setFloatingTexts] = useState([])
   const [showCombo, setShowCombo] = useState(false)
   const [fireworks, setFireworks] = useState([])
+  const [comboTexts, setComboTexts] = useState([])
   const audioRefs = useRef([])
   const particleIdRef = useRef(0)
   const floatIdRef = useRef(0)
@@ -71,9 +72,9 @@ function App() {
 
   const createParticles = useCallback(() => {
     const newParticles = []
-    for (let i = 0; i < 12; i++) {
-      const angle = (i / 12) * 360
-      const distance = 100 + Math.random() * 100
+    for (let i = 0; i < 20; i++) {
+      const angle = (i / 20) * 360 + Math.random() * 15
+      const distance = 80 + Math.random() * 140
       const emoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)]
       newParticles.push({
         id: particleIdRef.current++,
@@ -117,14 +118,14 @@ function App() {
     const colors = ['#ff6b6b', '#ffd93d', '#6bcfff', '#ff6b9d', '#b784ff', '#4ecdc4', '#ff8a5c']
     const newFireworks = []
 
-    // 從多個位置發射煙火
-    for (let burst = 0; burst < 5; burst++) {
+    // 更多煙火！更可愛！
+    for (let burst = 0; burst < 7; burst++) {
       const centerX = Math.random() * window.innerWidth
       const centerY = Math.random() * window.innerHeight * 0.7
 
-      for (let i = 0; i < 20; i++) {
-        const angle = (i / 20) * 360
-        const distance = 80 + Math.random() * 120
+      for (let i = 0; i < 24; i++) {
+        const angle = (i / 24) * 360
+        const distance = 60 + Math.random() * 100
         const tx = Math.cos(angle * Math.PI / 180) * distance
         const ty = Math.sin(angle * Math.PI / 180) * distance
 
@@ -156,6 +157,22 @@ function App() {
       // 觸發連發彩蛋！
       setShowCombo(true)
       createFireworks()
+
+      // 隨機生成連擊文字
+      const texts = ['好哇連發！💥', '超級好哇！🎉', '哇哇哇！✨', '太棒了！💖', '好哇好哇！🌈']
+      const colors = ['#fff', '#ffd93d', '#6bcfff', '#ff6b9d', '#b784ff']
+      const shuffled = texts.sort(() => Math.random() - 0.5).slice(0, 3 + Math.floor(Math.random() * 2))
+      const newComboTexts = shuffled.map((text, i) => ({
+        id: Date.now() + i,
+        text,
+        x: 10 + Math.random() * 60,
+        y: 15 + Math.random() * 50,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        delay: i * 0.2,
+        size: 28 + Math.random() * 24
+      }))
+      setComboTexts(newComboTexts)
+
       clickTimesRef.current = [] // 重置
 
       setTimeout(() => setShowCombo(false), 3000)
@@ -163,7 +180,9 @@ function App() {
   }, [createFireworks])
 
   const handleClick = useCallback((e) => {
-    // 浮動文字特效
+    // 多一點浮動文字！
+    createFloatingText(e)
+    setTimeout(() => createFloatingText(e), 50)
     createFloatingText(e)
 
     // 播放隨機音效
@@ -281,7 +300,22 @@ function App() {
       {/* 連發彩蛋 - 文字 */}
       {showCombo && (
         <div className="combo-overlay">
-          <div className="combo-text">好哇連發！💥</div>
+          {comboTexts.map(ct => (
+            <div
+              key={ct.id}
+              className="combo-text"
+              style={{
+                left: `${ct.x}%`,
+                top: `${ct.y}%`,
+                color: ct.color,
+                fontSize: `${ct.size}px`,
+                animationDelay: `${ct.delay}s`,
+                position: 'absolute'
+              }}
+            >
+              {ct.text}
+            </div>
+          ))}
         </div>
       )}
     </div>

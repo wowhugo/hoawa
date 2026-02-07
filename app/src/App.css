@@ -222,16 +222,24 @@ body {
     transform: scale(1) rotate(0deg);
   }
 
-  25% {
-    transform: scale(0.9) rotate(-15deg);
+  15% {
+    transform: scale(0.85) rotate(-8deg);
   }
 
-  50% {
-    transform: scale(1.15) rotate(10deg);
+  35% {
+    transform: scale(1.2) rotate(8deg);
+  }
+
+  55% {
+    transform: scale(0.95) rotate(-4deg);
   }
 
   75% {
-    transform: scale(1.05) rotate(-5deg);
+    transform: scale(1.1) rotate(3deg);
+  }
+
+  90% {
+    transform: scale(0.98) rotate(-1deg);
   }
 
   100% {
@@ -356,15 +364,16 @@ body {
 }
 
 .combo-text {
-  font-size: 48px;
+  font-size: 52px;
   font-weight: 900;
   color: #fff;
   text-shadow:
-    0 0 20px #ff6b35,
-    0 0 40px #ff6b35,
+    0 0 20px #ff6b9d,
+    0 0 40px #ff6b9d,
     0 0 60px #ffd93d,
-    4px 4px 0 #ff6b9d;
-  animation: combo-bounce 0.5s ease-out infinite;
+    3px 3px 0 #ff8a5c,
+    -2px -2px 0 #b784ff;
+  animation: combo-bounce 0.4s ease-in-out infinite, combo-glow 1s ease-in-out infinite;
   white-space: nowrap;
 }
 
@@ -372,11 +381,31 @@ body {
 
   0%,
   100% {
-    transform: scale(1) rotate(-2deg);
+    transform: scale(1) rotate(-3deg) translateY(0);
+  }
+
+  25% {
+    transform: scale(1.08) rotate(2deg) translateY(-8px);
   }
 
   50% {
-    transform: scale(1.1) rotate(2deg);
+    transform: scale(0.95) rotate(-2deg) translateY(0);
+  }
+
+  75% {
+    transform: scale(1.05) rotate(1deg) translateY(-4px);
+  }
+}
+
+@keyframes combo-glow {
+
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+
+  50% {
+    filter: brightness(1.2);
   }
 }
 
