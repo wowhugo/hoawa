@@ -1,0 +1,10 @@
+# Dependencies
+app/node_modules/
+
+# Build output
+app/dist/
+
+# Local files
+*.log
+.DS_Store
+*.bat
