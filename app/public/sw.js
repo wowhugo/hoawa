@@ -1,7 +1,7 @@
 const CACHE_NAME = 'hoawa-v1'
 const urlsToCache = [
     '/',
-    '/baby.png',
+    '/baby.webp',
     '/hoawa1.mp3',
     '/hoawa2.mp3',
     '/hoawa3.mp3',

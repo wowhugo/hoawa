@@ -193,7 +193,7 @@ function App() {
           className={`main-btn ${isPressed ? 'pressed' : ''}`}
           onClick={handleClick}
         >
-          <img src="/baby.png" alt="好哇！" className="btn-photo" />
+          <img src="/baby.webp" alt="好哇！" className="btn-photo" />
         </button>
       </div>
 
