@@ -46,10 +46,14 @@ function App() {
   const [showToast, setShowToast] = useState(false)
   const [countBounce, setCountBounce] = useState(false)
   const [floatingTexts, setFloatingTexts] = useState([])
+  const [showCombo, setShowCombo] = useState(false)
+  const [fireworks, setFireworks] = useState([])
   const audioRefs = useRef([])
   const particleIdRef = useRef(0)
   const floatIdRef = useRef(0)
+  const fireworkIdRef = useRef(0)
   const buttonRef = useRef(null)
+  const clickTimesRef = useRef([])
 
   // 預載音檔
   useEffect(() => {
@@ -108,6 +112,56 @@ function App() {
     }])
   }, [])
 
+  // 連擊彩蛋 - 煙火生成
+  const createFireworks = useCallback(() => {
+    const colors = ['#ff6b6b', '#ffd93d', '#6bcfff', '#ff6b9d', '#b784ff', '#4ecdc4', '#ff8a5c']
+    const newFireworks = []
+
+    // 從多個位置發射煙火
+    for (let burst = 0; burst < 5; burst++) {
+      const centerX = Math.random() * window.innerWidth
+      const centerY = Math.random() * window.innerHeight * 0.7
+
+      for (let i = 0; i < 20; i++) {
+        const angle = (i / 20) * 360
+        const distance = 80 + Math.random() * 120
+        const tx = Math.cos(angle * Math.PI / 180) * distance
+        const ty = Math.sin(angle * Math.PI / 180) * distance
+
+        newFireworks.push({
+          id: fireworkIdRef.current++,
+          x: centerX,
+          y: centerY,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          tx,
+          ty,
+          delay: burst * 0.2
+        })
+      }
+    }
+
+    setFireworks(newFireworks)
+    setTimeout(() => setFireworks([]), 2000)
+  }, [])
+
+  // 檢查連擊
+  const checkCombo = useCallback(() => {
+    const now = Date.now()
+    clickTimesRef.current.push(now)
+
+    // 只保留 3 秒內的點擊
+    clickTimesRef.current = clickTimesRef.current.filter(t => now - t < 3000)
+
+    if (clickTimesRef.current.length >= 5) {
+      // 觸發連發彩蛋！
+      setShowCombo(true)
+      createFireworks()
+      clickTimesRef.current = [] // 重置
+
+      setTimeout(() => setShowCombo(false), 3000)
+    }
+  }, [createFireworks])
+
   const handleClick = useCallback((e) => {
     // 浮動文字特效
     createFloatingText(e)
@@ -130,7 +184,10 @@ function App() {
     setCount(prev => prev + 1)
     setCountBounce(true)
     setTimeout(() => setCountBounce(false), 300)
-  }, [createParticles, createFloatingText])
+
+    // 檢查連擊彩蛋
+    checkCombo()
+  }, [createParticles, createFloatingText, checkCombo])
 
   const handleShare = useCallback(async () => {
     const text = `今天好哇了 ${count} 次！🎉`
@@ -204,6 +261,29 @@ function App() {
         <span className={`count-number ${countBounce ? 'bounce' : ''}`}>{count}</span>
         <span> 次</span>
       </div>
+
+      {/* 連發彩蛋 - 煙火 */}
+      {fireworks.map(fw => (
+        <div
+          key={fw.id}
+          className="firework"
+          style={{
+            left: fw.x,
+            top: fw.y,
+            backgroundColor: fw.color,
+            '--tx': `${fw.tx}px`,
+            '--ty': `${fw.ty}px`,
+            animationDelay: `${fw.delay}s`
+          }}
+        />
+      ))}
+
+      {/* 連發彩蛋 - 文字 */}
+      {showCombo && (
+        <div className="combo-overlay">
+          <div className="combo-text">好哇連發！💥</div>
+        </div>
+      )}
     </div>
   )
 }
