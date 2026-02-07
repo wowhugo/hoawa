@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import './App.css'
 
 const EMOJIS = ['😄', '🎉', '✨', '💫', '🌟']
-const AUDIO_FILES = ['/hoawa1.mp3', '/hoawa2.mp3', '/hoawa3.mp3', '/hoawa4.mp3', '/hoawa5.mp3']
+const BASE = import.meta.env.BASE_URL
+const AUDIO_FILES = [`${BASE}hoawa1.mp3`, `${BASE}hoawa2.mp3`, `${BASE}hoawa3.mp3`, `${BASE}hoawa4.mp3`, `${BASE}hoawa5.mp3`]
 const FLOAT_COLORS = ['#ff6b9d', '#ff8a5c', '#ffd93d', '#6bcfff', '#b784ff', '#ff6b6b']
 
 function Particle({ emoji, style, onComplete }) {
@@ -193,7 +194,7 @@ function App() {
           className={`main-btn ${isPressed ? 'pressed' : ''}`}
           onClick={handleClick}
         >
-          <img src="/baby.webp" alt="好哇！" className="btn-photo" />
+          <img src={`${BASE}baby.webp`} alt="好哇！" className="btn-photo" />
         </button>
       </div>
 
