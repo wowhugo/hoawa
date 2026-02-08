@@ -11,20 +11,14 @@
   <meta name="apple-mobile-web-app-title" content="好哇！" />
   <link rel="icon" type="image/png" href="/hoawa/icon-512.png" />
   <link rel="apple-touch-icon" href="/hoawa/icon-512.png" />
-  <link rel="manifest" href="/manifest.json" />
+
   <title>好哇！</title>
 </head>
 
 <body>
   <div id="root"></div>
   <script type="module" src="/src/main.jsx"></script>
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-      })
-    }
-  </script>
+
 </body>
 
 </html>
