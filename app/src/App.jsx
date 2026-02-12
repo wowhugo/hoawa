@@ -64,6 +64,7 @@ function App() {
   const [isPressed, setIsPressed] = useState(false)
   const [isSuperMode, setIsSuperMode] = useState(false)
   const [superModeProgress, setSuperModeProgress] = useState(0)
+  const [isCharging, setIsCharging] = useState(false)
   const [showToast, setShowToast] = useState(false)
   const [countBounce, setCountBounce] = useState(false)
   const [floatingTexts, setFloatingTexts] = useState([])
@@ -277,24 +278,25 @@ function App() {
     if (isSuperMode) return
 
     setIsPressed(true)
-    let progress = 0
+    setIsCharging(true)
+    // 用 requestAnimationFrame 確保先 render 出初始狀態（offset=full）再觸發 transition
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setSuperModeProgress(100)
+      })
+    })
 
-    progressInterval.current = setInterval(() => {
-      progress += 5
-      setSuperModeProgress(progress)
-      if (progress >= 100) {
-        clearInterval(progressInterval.current)
-        // 爆炸特效再觸發超級模式
-        createParticles(true)
-        createFireworks(true)
-        startSuperMode()
-      }
-    }, 125) // 2.5s 充滿
+    // 2.5 秒後觸發超級模式
+    longPressTimer.current = setTimeout(() => {
+      createParticles(true)
+      createFireworks(true)
+      startSuperMode()
+    }, 2500)
   }, [isSuperMode, startSuperMode, createParticles, createFireworks])
 
   const endLongPress = useCallback(() => {
     setIsPressed(false)
-    clearInterval(progressInterval.current)
+    setIsCharging(false)
     clearTimeout(longPressTimer.current)
     if (!isSuperMode) {
       setSuperModeProgress(0)
@@ -311,6 +313,8 @@ function App() {
     const randomIndex = Math.floor(Math.random() * AUDIO_FILES.length)
     const audio = audioRefs.current[randomIndex]
     audio.currentTime = 0
+    audio.playbackRate = 0.8 + Math.random() * 0.5 // 0.8~1.3x 隨機音高
+    audio.volume = 0.7 + Math.random() * 0.3 // 0.7~1.0 隨機音量
     audio.play().catch(() => { })
 
     setIsPressed(true)
@@ -417,26 +421,24 @@ function App() {
       {/* 主按鈕區域 */}
       <div className={`button-container ${isSuperMode ? 'super-active' : ''}`} ref={buttonRef}>
         {/* 充能進度環 */}
-        {!isSuperMode && superModeProgress > 0 && (
-          <svg className="charge-ring" viewBox="0 0 100 100">
-            <circle
-              className="charge-ring-bg"
-              cx="50"
-              cy="50"
-              r="45"
-            />
-            <circle
-              className="charge-ring-progress"
-              cx="50"
-              cy="50"
-              r="45"
-              style={{
-                strokeDasharray: `${2 * Math.PI * 45}`,
-                strokeDashoffset: `${2 * Math.PI * 45 * (1 - superModeProgress / 100)}`
-              }}
-            />
-          </svg>
-        )}
+        <svg className={`charge-ring ${isCharging ? 'charging' : ''}`} viewBox="0 0 100 100">
+          <circle
+            className="charge-ring-bg"
+            cx="50"
+            cy="50"
+            r="45"
+          />
+          <circle
+            className="charge-ring-progress"
+            cx="50"
+            cy="50"
+            r="45"
+            style={{
+              strokeDasharray: `${2 * Math.PI * 45}`,
+              strokeDashoffset: `${2 * Math.PI * 45 * (1 - superModeProgress / 100)}`
+            }}
+          />
+        </svg>
 
         {/* 超級模式光環 */}
         {isSuperMode && <div className="super-halo" />}

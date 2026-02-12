@@ -11,7 +11,8 @@ export default defineConfig({
       includeAssets: ['baby.webp', 'hoawa*.mp3', 'icon-512.png'],
       workbox: {
         skipWaiting: true,
-        clientsClaim: true
+        clientsClaim: true,
+        globIgnores: ['**/version.json']
       },
       manifest: {
         name: '好哇！',
