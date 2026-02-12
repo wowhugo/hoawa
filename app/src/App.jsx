@@ -207,7 +207,7 @@ function App() {
     // 播放特殊音效
     const superAudio = new Audio(`${BASE}hoawa3.mp3`)
     superAudio.playbackRate = 1.5
-    superAudio.play().catch(() => {})
+    superAudio.play().catch(() => { })
 
     // 自動連發模式
     let superClicks = 0
@@ -219,7 +219,7 @@ function App() {
       const audio = audioRefs.current[randomIndex]
       audio.currentTime = 0
       audio.playbackRate = 1.2 + Math.random() * 0.3
-      audio.play().catch(() => {})
+      audio.play().catch(() => { })
 
       setCount(prev => prev + 1)
       superClicks++
@@ -253,7 +253,7 @@ function App() {
         clearInterval(progressInterval.current)
         startSuperMode()
       }
-    }, 40) // 800ms 充滿
+    }, 125) // 2.5s 充滿
   }, [isSuperMode, startSuperMode])
 
   const endLongPress = useCallback(() => {
@@ -275,7 +275,7 @@ function App() {
     const randomIndex = Math.floor(Math.random() * AUDIO_FILES.length)
     const audio = audioRefs.current[randomIndex]
     audio.currentTime = 0
-    audio.play().catch(() => {})
+    audio.play().catch(() => { })
 
     setIsPressed(true)
     setTimeout(() => setIsPressed(false), 400)
