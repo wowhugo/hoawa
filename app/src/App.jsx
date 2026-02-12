@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import './App.css'
+import { useNotification } from './useNotification'
+import { useLeaderboard } from './useLeaderboard'
+import NicknameModal from './NicknameModal'
+import Leaderboard from './Leaderboard'
 
 const EMOJIS = ['😄', '🎉', '✨', '💫', '🌟', '🥳', '💖', '🌈', '🎀', '🍭', '⭐', '💕', '🎊', '🦋', '🌸']
 const BASE = import.meta.env.BASE_URL
@@ -52,6 +56,12 @@ function App() {
   const [fireworks, setFireworks] = useState([])
   const [comboTexts, setComboTexts] = useState([])
   const [showSuperModeEnd, setShowSuperModeEnd] = useState(false)
+  const [showLeaderboard, setShowLeaderboard] = useState(false)
+  const [nickname, setNickname] = useState(() => localStorage.getItem('hoawa_nickname') || '')
+
+  const { enabled: notifEnabled, toggleNotification } = useNotification()
+  const { scores, loading, myUid, submitScore, fetchScores } = useLeaderboard()
+  const scoreSubmitTimer = useRef(null)
 
   const audioRefs = useRef([])
   const particleIdRef = useRef(0)
@@ -83,6 +93,7 @@ function App() {
       clearInterval(progressInterval.current)
       clearInterval(superModeInterval.current)
       clearTimeout(longPressTimer.current)
+      clearTimeout(scoreSubmitTimer.current)
     }
   }, [])
 
@@ -241,6 +252,7 @@ function App() {
 
   // 長按處理
   const startLongPress = useCallback((e) => {
+    e.preventDefault() // 防止 iOS 長按選取圖片
     if (isSuperMode) return
 
     setIsPressed(true)
@@ -251,10 +263,13 @@ function App() {
       setSuperModeProgress(progress)
       if (progress >= 100) {
         clearInterval(progressInterval.current)
+        // 爆炸特效再觸發超級模式
+        createParticles(true)
+        createFireworks(true)
         startSuperMode()
       }
     }, 125) // 2.5s 充滿
-  }, [isSuperMode, startSuperMode])
+  }, [isSuperMode, startSuperMode, createParticles, createFireworks])
 
   const endLongPress = useCallback(() => {
     setIsPressed(false)
@@ -285,7 +300,16 @@ function App() {
     setCountBounce(true)
     setTimeout(() => setCountBounce(false), 300)
     checkCombo()
-  }, [createParticles, createFloatingText, checkCombo, isSuperMode])
+
+    // Debounced 排行榜更新
+    if (nickname) {
+      clearTimeout(scoreSubmitTimer.current)
+      scoreSubmitTimer.current = setTimeout(() => {
+        const latest = parseInt(localStorage.getItem('hoawaCount') || '0', 10) + 1
+        submitScore(nickname, latest)
+      }, 2000)
+    }
+  }, [createParticles, createFloatingText, checkCombo, isSuperMode, nickname, submitScore])
 
   const handleShare = useCallback(async () => {
     const text = `今天好哇了 ${count} 次！🎉`
@@ -305,12 +329,53 @@ function App() {
     }
   }, [count])
 
+  const handleNickname = useCallback((name) => {
+    setNickname(name)
+    localStorage.setItem('hoawa_nickname', name)
+    if (count > 0) submitScore(name, count)
+  }, [count, submitScore])
+
+  const openLeaderboard = useCallback(() => {
+    fetchScores()
+    setShowLeaderboard(true)
+  }, [fetchScores])
+
   return (
     <div className={`container ${isSuperMode ? 'super-mode' : ''}`}>
-      {/* 分享按鈕 */}
-      <button className="share-btn" onClick={handleShare} aria-label="分享">
-        📤
-      </button>
+      {/* 暱稱 Modal */}
+      {!nickname && <NicknameModal onSubmit={handleNickname} />}
+
+      {/* 排行榜 */}
+      {showLeaderboard && (
+        <Leaderboard
+          scores={scores}
+          loading={loading}
+          myUid={myUid}
+          onClose={() => setShowLeaderboard(false)}
+          onRefresh={fetchScores}
+        />
+      )}
+
+      {/* 頂部按鈕列 */}
+      <div className="top-actions">
+        <button
+          className={`action-btn ${notifEnabled ? 'active' : ''}`}
+          onClick={toggleNotification}
+          aria-label="通知"
+        >
+          {notifEnabled ? '🔔' : '🔕'}
+        </button>
+        <button
+          className="action-btn"
+          onClick={openLeaderboard}
+          aria-label="排行榜"
+        >
+          🏆
+        </button>
+        <button className="action-btn" onClick={handleShare} aria-label="分享">
+          📤
+        </button>
+      </div>
 
       {/* Toast 通知 */}
       <div className={`toast ${showToast ? 'show' : ''}`}>
@@ -385,8 +450,19 @@ function App() {
           onMouseLeave={endLongPress}
           onTouchStart={startLongPress}
           onTouchEnd={endLongPress}
+          onContextMenu={(e) => e.preventDefault()}
         >
-          <img src={`${BASE}baby.webp`} alt="好哇！" className={`btn-photo ${isSuperMode ? 'super-photo' : ''}`} />
+          <img
+            src={`${BASE}baby.webp`}
+            alt="好哇！"
+            className={`btn-photo ${isSuperMode ? 'super-photo' : ''}`}
+            style={{
+              transform: !isSuperMode && superModeProgress > 0
+                ? `scale(${1 + superModeProgress * 0.003})`
+                : undefined
+            }}
+            draggable={false}
+          />
           {isSuperMode && <div className="super-text">⚡️ 超級模式 ⚡️</div>}
         </button>
       </div>
