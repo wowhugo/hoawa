@@ -40,9 +40,24 @@ function FloatingText({ x, y, color, rotation, onComplete, text = "好哇！" })
   )
 }
 
+function getToday() {
+  return new Date().toISOString().slice(0, 10)
+}
+
 function App() {
   const [count, setCount] = useState(() => {
+    const savedDate = localStorage.getItem('hoawaCountDate')
+    const today = getToday()
+    if (savedDate !== today) {
+      localStorage.setItem('hoawaCount', '0')
+      localStorage.setItem('hoawaCountDate', today)
+      return 0
+    }
     const saved = localStorage.getItem('hoawaCount')
+    return saved ? parseInt(saved, 10) : 0
+  })
+  const [totalCount, setTotalCount] = useState(() => {
+    const saved = localStorage.getItem('hoawaTotalCount')
     return saved ? parseInt(saved, 10) : 0
   })
   const [particles, setParticles] = useState([])
@@ -60,7 +75,7 @@ function App() {
   const [nickname, setNickname] = useState(() => localStorage.getItem('hoawa_nickname') || '')
 
   const { enabled: notifEnabled, toggleNotification } = useNotification()
-  const { scores, loading, myUid, submitScore, fetchScores } = useLeaderboard()
+  const { scores, loading, myUid, mode: lbMode, submitScore, fetchScores, switchMode } = useLeaderboard()
   const scoreSubmitTimer = useRef(null)
 
   const audioRefs = useRef([])
@@ -85,7 +100,12 @@ function App() {
   // 儲存計數到 localStorage
   useEffect(() => {
     localStorage.setItem('hoawaCount', count.toString())
+    localStorage.setItem('hoawaCountDate', getToday())
   }, [count])
+
+  useEffect(() => {
+    localStorage.setItem('hoawaTotalCount', totalCount.toString())
+  }, [totalCount])
 
   // 組件卸載時清理 intervals
   useEffect(() => {
@@ -233,6 +253,7 @@ function App() {
       audio.play().catch(() => { })
 
       setCount(prev => prev + 1)
+      setTotalCount(prev => prev + 1)
       superClicks++
 
       if (superClicks % 5 === 0) {
@@ -297,6 +318,7 @@ function App() {
 
     createParticles()
     setCount(prev => prev + 1)
+    setTotalCount(prev => prev + 1)
     setCountBounce(true)
     setTimeout(() => setCountBounce(false), 300)
     checkCombo()
@@ -305,8 +327,9 @@ function App() {
     if (nickname) {
       clearTimeout(scoreSubmitTimer.current)
       scoreSubmitTimer.current = setTimeout(() => {
-        const latest = parseInt(localStorage.getItem('hoawaCount') || '0', 10) + 1
-        submitScore(nickname, latest)
+        const daily = parseInt(localStorage.getItem('hoawaCount') || '0', 10) + 1
+        const total = parseInt(localStorage.getItem('hoawaTotalCount') || '0', 10) + 1
+        submitScore(nickname, daily, total)
       }, 2000)
     }
   }, [createParticles, createFloatingText, checkCombo, isSuperMode, nickname, submitScore])
@@ -332,8 +355,8 @@ function App() {
   const handleNickname = useCallback((name) => {
     setNickname(name)
     localStorage.setItem('hoawa_nickname', name)
-    if (count > 0) submitScore(name, count)
-  }, [count, submitScore])
+    if (count > 0) submitScore(name, count, totalCount)
+  }, [count, totalCount, submitScore])
 
   const openLeaderboard = useCallback(() => {
     fetchScores()
@@ -351,8 +374,10 @@ function App() {
           scores={scores}
           loading={loading}
           myUid={myUid}
+          mode={lbMode}
           onClose={() => setShowLeaderboard(false)}
-          onRefresh={fetchScores}
+          onRefresh={() => fetchScores(lbMode)}
+          onSwitchMode={switchMode}
         />
       )}
 

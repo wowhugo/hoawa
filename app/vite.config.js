@@ -9,6 +9,10 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['baby.webp', 'hoawa*.mp3', 'icon-512.png'],
+      workbox: {
+        skipWaiting: true,
+        clientsClaim: true
+      },
       manifest: {
         name: '好哇！',
         short_name: '好哇',

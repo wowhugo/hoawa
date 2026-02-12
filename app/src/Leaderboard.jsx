@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 
-function Leaderboard({ scores, loading, myUid, onClose, onRefresh }) {
+function Leaderboard({ scores, loading, myUid, mode, onClose, onRefresh, onSwitchMode }) {
     // ESC 關閉
     useEffect(() => {
         const handleKey = (e) => {
@@ -9,6 +9,8 @@ function Leaderboard({ scores, loading, myUid, onClose, onRefresh }) {
         window.addEventListener('keydown', handleKey)
         return () => window.removeEventListener('keydown', handleKey)
     }, [onClose])
+
+    const scoreField = mode === 'daily' ? 'dailyScore' : 'totalScore'
 
     return (
         <>
@@ -19,11 +21,29 @@ function Leaderboard({ scores, loading, myUid, onClose, onRefresh }) {
                     <button className="lb-close" onClick={onClose}>✕</button>
                 </div>
 
+                {/* 切換 tabs */}
+                <div className="lb-tabs">
+                    <button
+                        className={`lb-tab ${mode === 'daily' ? 'active' : ''}`}
+                        onClick={() => onSwitchMode('daily')}
+                    >
+                        📅 今日
+                    </button>
+                    <button
+                        className={`lb-tab ${mode === 'total' ? 'active' : ''}`}
+                        onClick={() => onSwitchMode('total')}
+                    >
+                        👑 總榜
+                    </button>
+                </div>
+
                 <div className="lb-list">
                     {loading ? (
                         <div className="lb-loading">載入中...</div>
                     ) : scores.length === 0 ? (
-                        <div className="lb-empty">還沒有人上榜，快來當第一名！</div>
+                        <div className="lb-empty">
+                            {mode === 'daily' ? '今天還沒有人好哇，快來當第一名！' : '還沒有人上榜，快來當第一名！'}
+                        </div>
                     ) : (
                         scores.map((entry, i) => (
                             <div
@@ -34,7 +54,7 @@ function Leaderboard({ scores, loading, myUid, onClose, onRefresh }) {
                                     {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`}
                                 </span>
                                 <span className="lb-name">{entry.nickname}</span>
-                                <span className="lb-score">{entry.score.toLocaleString()}</span>
+                                <span className="lb-score">{(entry[scoreField] || 0).toLocaleString()}</span>
                             </div>
                         ))
                     )}
