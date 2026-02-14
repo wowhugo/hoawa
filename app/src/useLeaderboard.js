@@ -1,15 +1,5 @@
 import { useState, useCallback } from 'react'
-import { db, ensureAuth } from './firebase'
-import {
-    doc,
-    setDoc,
-    getDocs,
-    collection,
-    query,
-    orderBy,
-    limit,
-    serverTimestamp
-} from 'firebase/firestore'
+import { getDb, ensureAuth } from './firebase'
 
 function getToday() {
     return new Date().toISOString().slice(0, 10) // YYYY-MM-DD
@@ -28,6 +18,8 @@ export function useLeaderboard() {
 
             setMyUid(user.uid)
 
+            const { doc, setDoc, serverTimestamp } = await import('firebase/firestore')
+            const db = await getDb()
             await setDoc(doc(db, 'leaderboard', user.uid), {
                 nickname,
                 dailyScore,
@@ -47,6 +39,8 @@ export function useLeaderboard() {
             const user = await ensureAuth()
             if (user) setMyUid(user.uid)
 
+            const { getDocs, collection, query, orderBy, limit } = await import('firebase/firestore')
+            const db = await getDb()
             const sortField = currentMode === 'daily' ? 'dailyScore' : 'totalScore'
             const q = query(
                 collection(db, 'leaderboard'),

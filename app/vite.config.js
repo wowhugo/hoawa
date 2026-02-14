@@ -34,4 +34,17 @@ export default defineConfig({
     })
   ],
   base: '/hoawa/',  // GitHub repo 名稱
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          firebase: [
+            'firebase/app',
+            'firebase/auth',
+            'firebase/firestore'
+          ]
+        }
+      }
+    }
+  }
 })

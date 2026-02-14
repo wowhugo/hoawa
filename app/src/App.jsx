@@ -274,7 +274,7 @@ function App() {
 
   // 長按處理
   const startLongPress = useCallback((e) => {
-    e.preventDefault() // 防止 iOS 長按選取圖片
+    // e.preventDefault() // 防止 iOS 長按選取圖片 <- 改用 CSS user-select: none 處理
     if (isSuperMode) return
 
     setIsPressed(true)
@@ -301,6 +301,8 @@ function App() {
     if (!isSuperMode) {
       setSuperModeProgress(0)
     }
+    // Mobile fix: ensure click doesn't re-trigger pressed state
+    setTimeout(() => setIsPressed(false), 50)
   }, [isSuperMode])
 
   const handleClick = useCallback((e) => {
@@ -477,6 +479,7 @@ function App() {
           onMouseLeave={endLongPress}
           onTouchStart={startLongPress}
           onTouchEnd={endLongPress}
+          onTouchCancel={endLongPress}
           onContextMenu={(e) => e.preventDefault()}
         >
           <img
