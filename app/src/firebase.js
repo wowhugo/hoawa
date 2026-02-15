@@ -5,13 +5,13 @@ async function getApp() {
     if (!_app) {
         const { initializeApp } = await import('firebase/app')
         _app = initializeApp({
-            apiKey: "AIzaSyCD65mp_KM6uP8wAqu4R2sZ6cN_4Me1y8c",
-            authDomain: "hoawa-56468.firebaseapp.com",
-            projectId: "hoawa-56468",
-            storageBucket: "hoawa-56468.firebasestorage.app",
-            messagingSenderId: "258752831758",
-            appId: "1:258752831758:web:91e05d3791c2a7fa7d375f",
-            measurementId: "G-KE8ZPF3J1N"
+            apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+            authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+            projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+            storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+            messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+            appId: import.meta.env.VITE_FIREBASE_APP_ID,
+            measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
         })
     }
     return _app
