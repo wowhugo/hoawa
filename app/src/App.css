@@ -406,6 +406,7 @@ body {
   font-size: 28px;
   animation: particle-fly 1.5s ease-out forwards;
   animation-delay: var(--delay);
+  will-change: transform, opacity;
 }
 
 @keyframes particle-fly {
@@ -486,6 +487,7 @@ body {
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
   animation: float-up 1.5s ease-out forwards;
   transform: rotate(var(--rotation));
+  will-change: transform, opacity;
 }
 
 @keyframes float-up {
@@ -714,6 +716,7 @@ body {
   pointer-events: none;
   z-index: 999;
   animation: firework-explode 1.5s ease-out forwards;
+  will-change: transform, opacity;
 }
 
 @keyframes firework-explode {

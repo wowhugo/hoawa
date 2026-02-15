@@ -10,36 +10,6 @@ const BASE = import.meta.env.BASE_URL
 const AUDIO_FILES = [`${BASE}hoawa1.mp3`, `${BASE}hoawa2.mp3`, `${BASE}hoawa3.mp3`, `${BASE}hoawa4.mp3`, `${BASE}hoawa5.mp3`]
 const FLOAT_COLORS = ['#ff6b9d', '#ff8a5c', '#ffd93d', '#6bcfff', '#b784ff', '#ff6b6b']
 
-function Particle({ emoji, style, onComplete }) {
-  useEffect(() => {
-    const timer = setTimeout(onComplete, 1500)
-    return () => clearTimeout(timer)
-  }, [onComplete])
-
-  return <span className="particle" style={style}>{emoji}</span>
-}
-
-function FloatingText({ x, y, color, rotation, onComplete, text = "好哇！" }) {
-  useEffect(() => {
-    const timer = setTimeout(onComplete, 1500)
-    return () => clearTimeout(timer)
-  }, [onComplete])
-
-  return (
-    <span
-      className="floating-text"
-      style={{
-        left: x,
-        top: y,
-        color,
-        '--rotation': `${rotation}deg`
-      }}
-    >
-      {text}
-    </span>
-  )
-}
-
 function getToday() {
   return new Date().toISOString().slice(0, 10)
 }
@@ -60,17 +30,12 @@ function App() {
     const saved = localStorage.getItem('hoawaTotalCount')
     return saved ? parseInt(saved, 10) : 0
   })
-  const [particles, setParticles] = useState([])
   const [isPressed, setIsPressed] = useState(false)
   const [isSuperMode, setIsSuperMode] = useState(false)
   const [superModeProgress, setSuperModeProgress] = useState(0)
   const [isCharging, setIsCharging] = useState(false)
   const [showToast, setShowToast] = useState(false)
   const [countBounce, setCountBounce] = useState(false)
-  const [floatingTexts, setFloatingTexts] = useState([])
-  const [showCombo, setShowCombo] = useState(false)
-  const [fireworks, setFireworks] = useState([])
-  const [comboTexts, setComboTexts] = useState([])
   const [showSuperModeEnd, setShowSuperModeEnd] = useState(false)
   const [showLeaderboard, setShowLeaderboard] = useState(false)
   const [nickname, setNickname] = useState(() => localStorage.getItem('hoawa_nickname') || '')
@@ -80,13 +45,9 @@ function App() {
   const scoreSubmitTimer = useRef(null)
 
   const audioRefs = useRef([])
-  const particleIdRef = useRef(0)
-  const floatIdRef = useRef(0)
-  const fireworkIdRef = useRef(0)
   const buttonRef = useRef(null)
   const clickTimesRef = useRef([])
   const longPressTimer = useRef(null)
-  const progressInterval = useRef(null)
   const superModeInterval = useRef(null)
   const isTouchRef = useRef(false)
 
@@ -109,100 +70,118 @@ function App() {
     localStorage.setItem('hoawaTotalCount', totalCount.toString())
   }, [totalCount])
 
-  // 組件卸載時清理 intervals
+  // 組件卸載時清理
   useEffect(() => {
     return () => {
-      clearInterval(progressInterval.current)
       clearInterval(superModeInterval.current)
       clearTimeout(longPressTimer.current)
       clearTimeout(scoreSubmitTimer.current)
     }
   }, [])
 
+  // =========== 原生 DOM 特效（不走 React re-render）===========
+
+  // 粒子特效 - 原生 DOM
   const createParticles = useCallback((isSuper = false) => {
-    const particleCount = isSuper ? 40 : 20
-    const newParticles = []
+    const container = buttonRef.current?.querySelector('.particles')
+    if (!container) return
+
+    const particleCount = isSuper ? 20 : 10
     for (let i = 0; i < particleCount; i++) {
       const angle = (i / particleCount) * 360 + Math.random() * 15
       const distance = isSuper ? 120 + Math.random() * 180 : 80 + Math.random() * 140
       const emoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)]
-      newParticles.push({
-        id: particleIdRef.current++,
-        emoji,
-        style: {
-          '--angle': `${angle}deg`,
-          '--distance': `${distance}px`,
-          '--delay': `${Math.random() * 0.2}s`,
-          '--scale': isSuper ? 1.5 : 1,
-          '--rainbow': isSuper ? `hue-rotate(${Math.random() * 360}deg)` : 'none'
-        }
-      })
-    }
-    setParticles(prev => [...prev, ...newParticles])
-  }, [])
 
-  const removeParticle = useCallback((id) => {
-    setParticles(prev => prev.filter(p => p.id !== id))
-  }, [])
+      const el = document.createElement('span')
+      el.className = 'particle'
+      el.textContent = emoji
+      el.style.cssText = `--angle:${angle}deg;--distance:${distance}px;--delay:${Math.random() * 0.2}s`
+      container.appendChild(el)
 
-  const removeFloatingText = useCallback((id) => {
-    setFloatingTexts(prev => prev.filter(t => t.id !== id))
-  }, [])
-
-  const createFloatingText = useCallback((e, isSuper = false, text = "好哇！") => {
-    const rect = buttonRef.current.getBoundingClientRect()
-    const x = e ? e.clientX - rect.left : rect.width / 2 + (Math.random() - 0.5) * 100
-    const y = e ? e.clientY - rect.top : rect.height / 2 + (Math.random() - 0.5) * 100
-    const color = isSuper ? '#ffd700' : FLOAT_COLORS[Math.floor(Math.random() * FLOAT_COLORS.length)]
-    const rotation = (Math.random() - 0.5) * 30
-
-    const count = isSuper ? 5 : 3
-    for (let i = 0; i < count; i++) {
-      setTimeout(() => {
-        setFloatingTexts(prev => [...prev, {
-          id: floatIdRef.current++,
-          x: x + (Math.random() - 0.5) * 50,
-          y: y + (Math.random() - 0.5) * 50,
-          color: isSuper ? `hsl(${Math.random() * 360}, 100%, 60%)` : color,
-          rotation,
-          text: isSuper ? ["超級好哇！🔥", "能量爆發！⚡️", "無敵好哇！💥"][Math.floor(Math.random() * 3)] : text
-        }])
-      }, i * 100)
+      // animation 結束後自動移除
+      el.addEventListener('animationend', () => el.remove(), { once: true })
     }
   }, [])
 
-  // 煙火特效
+  // 浮動文字 - 原生 DOM
+  const createFloatingText = useCallback((e, isSuper = false) => {
+    const wrapper = buttonRef.current
+    if (!wrapper) return
+
+    const rect = wrapper.getBoundingClientRect()
+    const baseX = e ? e.clientX - rect.left : rect.width / 2 + (Math.random() - 0.5) * 100
+    const baseY = e ? e.clientY - rect.top : rect.height / 2 + (Math.random() - 0.5) * 100
+
+    const textCount = isSuper ? 3 : 2
+    const superTexts = ["超級好哇！🔥", "能量爆發！⚡️", "無敵好哇！💥"]
+
+    for (let i = 0; i < textCount; i++) {
+      const el = document.createElement('span')
+      el.className = 'floating-text'
+      const color = isSuper
+        ? `hsl(${Math.random() * 360}, 100%, 60%)`
+        : FLOAT_COLORS[Math.floor(Math.random() * FLOAT_COLORS.length)]
+      const rotation = (Math.random() - 0.5) * 30
+      const x = baseX + (Math.random() - 0.5) * 50
+      const y = baseY + (Math.random() - 0.5) * 50
+
+      el.textContent = isSuper ? superTexts[Math.floor(Math.random() * 3)] : '好哇！'
+      el.style.cssText = `left:${x}px;top:${y}px;color:${color};--rotation:${rotation}deg`
+      wrapper.appendChild(el)
+
+      el.addEventListener('animationend', () => el.remove(), { once: true })
+    }
+  }, [])
+
+  // 煙火特效 - 原生 DOM
   const createFireworks = useCallback((isSuper = false) => {
     const colors = ['#ff6b6b', '#ffd93d', '#6bcfff', '#ff6b9d', '#b784ff', '#4ecdc4', '#ff8a5c']
-    const burstCount = isSuper ? 12 : 7
-    const newFireworks = []
+    const burstCount = isSuper ? 8 : 5
+    const particlesPerBurst = 16
 
     for (let burst = 0; burst < burstCount; burst++) {
       const centerX = Math.random() * window.innerWidth
       const centerY = Math.random() * window.innerHeight * 0.7
 
-      for (let i = 0; i < 24; i++) {
-        const angle = (i / 24) * 360
+      for (let i = 0; i < particlesPerBurst; i++) {
+        const angle = (i / particlesPerBurst) * 360
         const distance = 60 + Math.random() * 100
         const tx = Math.cos(angle * Math.PI / 180) * distance
         const ty = Math.sin(angle * Math.PI / 180) * distance
+        const size = isSuper ? 8 + Math.random() * 6 : 4 + Math.random() * 4
 
-        newFireworks.push({
-          id: fireworkIdRef.current++,
-          x: centerX,
-          y: centerY,
-          color: colors[Math.floor(Math.random() * colors.length)],
-          tx,
-          ty,
-          delay: burst * 0.15,
-          size: isSuper ? 8 + Math.random() * 6 : 4 + Math.random() * 4
-        })
+        const el = document.createElement('div')
+        el.className = 'firework'
+        el.style.cssText = `left:${centerX}px;top:${centerY}px;background:${colors[Math.floor(Math.random() * colors.length)]};--tx:${tx}px;--ty:${ty}px;animation-delay:${burst * 0.15}s;width:${size}px;height:${size}px`
+        document.body.appendChild(el)
+
+        el.addEventListener('animationend', () => el.remove(), { once: true })
       }
     }
-
-    setFireworks(newFireworks)
-    setTimeout(() => setFireworks([]), 3000)
   }, [])
+
+  // 連擊文字 - 原生 DOM
+  const createComboOverlay = useCallback(() => {
+    const overlay = document.createElement('div')
+    overlay.className = 'combo-overlay'
+
+    const texts = ['好哇連發！💥', '超級好哇！🎉', '哇哇哇！✨', '太棒了！💖']
+    const colors = ['#fff', '#ffd93d', '#6bcfff', '#ff6b9d']
+    const shuffled = texts.sort(() => Math.random() - 0.5).slice(0, 3)
+
+    shuffled.forEach((text, i) => {
+      const el = document.createElement('div')
+      el.className = 'combo-text'
+      el.textContent = text
+      el.style.cssText = `left:${10 + Math.random() * 60}%;top:${15 + Math.random() * 50}%;color:${colors[Math.floor(Math.random() * colors.length)]};font-size:${28 + Math.random() * 24}px;animation-delay:${i * 0.2}s`
+      overlay.appendChild(el)
+    })
+
+    document.body.appendChild(overlay)
+    setTimeout(() => overlay.remove(), 3000)
+  }, [])
+
+  // =========== 遊戲邏輯 ===========
 
   // 檢查連擊
   const checkCombo = useCallback(() => {
@@ -211,26 +190,11 @@ function App() {
     clickTimesRef.current = clickTimesRef.current.filter(t => now - t < 3000)
 
     if (clickTimesRef.current.length >= 5) {
-      setShowCombo(true)
+      createComboOverlay()
       createFireworks()
-
-      const texts = ['好哇連發！💥', '超級好哇！🎉', '哇哇哇！✨', '太棒了！💖']
-      const colors = ['#fff', '#ffd93d', '#6bcfff', '#ff6b9d']
-      const shuffled = texts.sort(() => Math.random() - 0.5).slice(0, 3)
-      const newComboTexts = shuffled.map((text, i) => ({
-        id: Date.now() + i,
-        text,
-        x: 10 + Math.random() * 60,
-        y: 15 + Math.random() * 50,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        delay: i * 0.2,
-        size: 28 + Math.random() * 24
-      }))
-      setComboTexts(newComboTexts)
       clickTimesRef.current = []
-      setTimeout(() => setShowCombo(false), 3000)
     }
-  }, [createFireworks])
+  }, [createFireworks, createComboOverlay])
 
   // 🔥 超級好哇模式！
   const startSuperMode = useCallback(() => {
@@ -308,22 +272,20 @@ function App() {
     if (!isSuperMode) {
       setSuperModeProgress(0)
     }
-    // Mobile fix: ensure click doesn't re-trigger pressed state
     setTimeout(() => setIsPressed(false), 50)
   }, [isSuperMode])
 
   const handleClick = useCallback((e) => {
     if (isSuperMode) return
 
-    createFloatingText(e)
-    setTimeout(() => createFloatingText(e), 50)
+    // 浮動文字：只呼叫 1 次（內部會生成 2 個）
     createFloatingText(e)
 
     const randomIndex = Math.floor(Math.random() * AUDIO_FILES.length)
     const audio = audioRefs.current[randomIndex]
     audio.currentTime = 0
-    audio.playbackRate = 0.8 + Math.random() * 0.5 // 0.8~1.3x 隨機音高
-    audio.volume = 0.7 + Math.random() * 0.3 // 0.7~1.0 隨機音量
+    audio.playbackRate = 0.8 + Math.random() * 0.5
+    audio.volume = 0.7 + Math.random() * 0.3
     audio.play().catch(() => { })
 
     setIsPressed(true)
@@ -452,30 +414,8 @@ function App() {
         {/* 超級模式光環 */}
         {isSuperMode && <div className="super-halo" />}
 
-        {/* 粒子特效 */}
-        <div className="particles">
-          {particles.map(p => (
-            <Particle
-              key={p.id}
-              emoji={p.emoji}
-              style={p.style}
-              onComplete={() => removeParticle(p.id)}
-            />
-          ))}
-        </div>
-
-        {/* 浮動文字特效 */}
-        {floatingTexts.map(t => (
-          <FloatingText
-            key={t.id}
-            x={t.x}
-            y={t.y}
-            color={t.color}
-            rotation={t.rotation}
-            text={t.text}
-            onComplete={() => removeFloatingText(t.id)}
-          />
-        ))}
+        {/* 粒子容器（原生 DOM 插入點） */}
+        <div className="particles" />
 
         {/* 主按鈕 */}
         <button
@@ -510,45 +450,6 @@ function App() {
         <span className={`count-number ${countBounce ? 'bounce' : ''} ${isSuperMode ? 'super-count' : ''}`}>{count}</span>
         <span> 次</span>
       </div>
-
-      {/* 連發彩蛋 - 煙火 */}
-      {fireworks.map(fw => (
-        <div
-          key={fw.id}
-          className="firework"
-          style={{
-            left: fw.x,
-            top: fw.y,
-            backgroundColor: fw.color,
-            '--tx': `${fw.tx}px`,
-            '--ty': `${fw.ty}px`,
-            animationDelay: `${fw.delay}s`,
-            width: `${fw.size}px`,
-            height: `${fw.size}px`
-          }}
-        />
-      ))}
-
-      {/* 連發彩蛋 - 文字 */}
-      {showCombo && (
-        <div className="combo-overlay">
-          {comboTexts.map(ct => (
-            <div
-              key={ct.id}
-              className="combo-text"
-              style={{
-                left: `${ct.x}%`,
-                top: `${ct.y}%`,
-                color: ct.color,
-                fontSize: `${ct.size}px`,
-                animationDelay: `${ct.delay}s`
-              }}
-            >
-              {ct.text}
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   )
 }
