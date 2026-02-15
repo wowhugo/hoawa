@@ -88,6 +88,7 @@ function App() {
   const longPressTimer = useRef(null)
   const progressInterval = useRef(null)
   const superModeInterval = useRef(null)
+  const isTouchRef = useRef(false)
 
   // 預載音檔
   useEffect(() => {
@@ -274,7 +275,10 @@ function App() {
 
   // 長按處理
   const startLongPress = useCallback((e) => {
-    // e.preventDefault() // 防止 iOS 長按選取圖片 <- 改用 CSS user-select: none 處理
+    // 觸控裝置偵測：忽略合成的 mouse 事件
+    if (e.type === 'touchstart') isTouchRef.current = true
+    if (e.type === 'mousedown' && isTouchRef.current) return
+
     if (isSuperMode) return
 
     setIsPressed(true)
@@ -294,7 +298,10 @@ function App() {
     }, 2500)
   }, [isSuperMode, startSuperMode, createParticles, createFireworks])
 
-  const endLongPress = useCallback(() => {
+  const endLongPress = useCallback((e) => {
+    // 觸控裝置上忽略合成的 mouse 事件
+    if (e?.type?.startsWith('mouse') && isTouchRef.current) return
+
     setIsPressed(false)
     setIsCharging(false)
     clearTimeout(longPressTimer.current)
