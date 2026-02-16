@@ -44,21 +44,52 @@ function App() {
   const { scores, loading, myUid, mode: lbMode, submitScore, fetchScores, switchMode } = useLeaderboard()
   const scoreSubmitTimer = useRef(null)
 
-  const audioRefs = useRef([])
+  const audioCtxRef = useRef(null)
+  const audioBuffersRef = useRef([])
   const buttonRef = useRef(null)
   const clickTimesRef = useRef([])
   const longPressTimer = useRef(null)
   const superModeInterval = useRef(null)
   const isTouchRef = useRef(false)
 
-  // 預載音檔
-  useEffect(() => {
-    audioRefs.current = AUDIO_FILES.map(src => {
-      const audio = new Audio(src)
-      audio.preload = 'auto'
-      return audio
-    })
+  // 取得或建立 AudioContext（iOS 需要在 user gesture 後 resume）
+  const getAudioCtx = useCallback(() => {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)()
+    }
+    const ctx = audioCtxRef.current
+    if (ctx.state === 'suspended') ctx.resume()
+    return ctx
   }, [])
+
+  // 預載音檔為 AudioBuffer（decode 後的 PCM 存在記憶體，播放零延遲）
+  useEffect(() => {
+    const ctx = getAudioCtx()
+    AUDIO_FILES.forEach((src, i) => {
+      fetch(src)
+        .then(r => r.arrayBuffer())
+        .then(buf => ctx.decodeAudioData(buf))
+        .then(decoded => { audioBuffersRef.current[i] = decoded })
+        .catch(() => { })
+    })
+  }, [getAudioCtx])
+
+  // 播放音效：每次建新的 AudioBufferSourceNode（輕量），不會有 contention
+  const playSound = useCallback((opts = {}) => {
+    const ctx = getAudioCtx()
+    const bufs = audioBuffersRef.current.filter(Boolean)
+    if (!bufs.length) return
+    const buf = opts.index != null && audioBuffersRef.current[opts.index]
+      ? audioBuffersRef.current[opts.index]
+      : bufs[Math.floor(Math.random() * bufs.length)]
+    const source = ctx.createBufferSource()
+    source.buffer = buf
+    source.playbackRate.value = opts.rate ?? (0.8 + Math.random() * 0.5)
+    const gain = ctx.createGain()
+    gain.gain.value = opts.volume ?? (0.7 + Math.random() * 0.3)
+    source.connect(gain).connect(ctx.destination)
+    source.start(0)
+  }, [getAudioCtx])
 
   // 儲存計數到 localStorage
   useEffect(() => {
@@ -202,9 +233,7 @@ function App() {
     setSuperModeProgress(100)
 
     // 播放特殊音效
-    const superAudio = new Audio(`${BASE}hoawa3.mp3`)
-    superAudio.playbackRate = 1.5
-    superAudio.play().catch(() => { })
+    playSound({ index: 2, rate: 1.5, volume: 1 })
 
     // 自動連發模式
     let superClicks = 0
@@ -212,11 +241,7 @@ function App() {
       createParticles(true)
       createFloatingText(null, true)
 
-      const randomIndex = Math.floor(Math.random() * AUDIO_FILES.length)
-      const audio = audioRefs.current[randomIndex]
-      audio.currentTime = 0
-      audio.playbackRate = 1.2 + Math.random() * 0.3
-      audio.play().catch(() => { })
+      playSound({ rate: 1.2 + Math.random() * 0.3 })
 
       setCount(prev => prev + 1)
       setTotalCount(prev => prev + 1)
@@ -235,7 +260,7 @@ function App() {
       setShowSuperModeEnd(true)
       setTimeout(() => setShowSuperModeEnd(false), 2000)
     }, 3000)
-  }, [createFireworks, createFloatingText, createParticles])
+  }, [createFireworks, createFloatingText, createParticles, playSound])
 
   // 長按處理
   const startLongPress = useCallback((e) => {
@@ -245,6 +270,7 @@ function App() {
 
     if (isSuperMode) return
 
+    getAudioCtx() // 確保 iOS AudioContext 在 user gesture 內被啟動
     setIsPressed(true)
     setIsCharging(true)
     // 用 requestAnimationFrame 確保先 render 出初始狀態（offset=full）再觸發 transition
@@ -260,7 +286,7 @@ function App() {
       createFireworks(true)
       startSuperMode()
     }, 2500)
-  }, [isSuperMode, startSuperMode, createParticles, createFireworks])
+  }, [isSuperMode, startSuperMode, createParticles, createFireworks, getAudioCtx])
 
   const endLongPress = useCallback((e) => {
     // 觸控裝置上忽略合成的 mouse 事件
@@ -281,12 +307,7 @@ function App() {
     // 浮動文字：只呼叫 1 次（內部會生成 2 個）
     createFloatingText(e)
 
-    const randomIndex = Math.floor(Math.random() * AUDIO_FILES.length)
-    const audio = audioRefs.current[randomIndex]
-    audio.currentTime = 0
-    audio.playbackRate = 0.8 + Math.random() * 0.5
-    audio.volume = 0.7 + Math.random() * 0.3
-    audio.play().catch(() => { })
+    playSound()
 
     setIsPressed(true)
     setTimeout(() => setIsPressed(false), 400)
@@ -307,7 +328,7 @@ function App() {
         submitScore(nickname, daily, total)
       }, 2000)
     }
-  }, [createParticles, createFloatingText, checkCombo, isSuperMode, nickname, submitScore])
+  }, [createParticles, createFloatingText, checkCombo, isSuperMode, nickname, submitScore, playSound])
 
   const handleShare = useCallback(async () => {
     const text = `今天好哇了 ${count} 次！🎉`
