@@ -43,18 +43,35 @@ function App() {
   const { enabled: notifEnabled, toggleNotification } = useNotification()
   const { scores, loading, myUid, mode: lbMode, submitScore, fetchScores, switchMode } = useLeaderboard()
   const scoreSubmitTimer = useRef(null)
-
+  // === Audio: HTMLAudioElement pool (fallback) + Web Audio API (primary when ready) ===
+  const POOL_PER_FILE = 3
+  const audioPoolRef = useRef([])        // HTMLAudioElement pool: POOL_PER_FILE * AUDIO_FILES.length
+  const audioPoolIndexRef = useRef(0)    // round-robin index
+  const audioUnlockedRef = useRef(false)
   const audioCtxRef = useRef(null)
-  const audioBuffersRef = useRef([])
-  const rawBuffersRef = useRef([])   // 先存 raw ArrayBuffer，等 user gesture 才 decode
+  const audioBuffersRef = useRef([])     // decoded AudioBuffer[]
+  const rawBuffersRef = useRef([])       // raw ArrayBuffer[]
+
   const buttonRef = useRef(null)
   const clickTimesRef = useRef([])
   const longPressTimer = useRef(null)
   const superModeInterval = useRef(null)
   const isTouchRef = useRef(false)
 
-  // 只 fetch raw ArrayBuffer（不需要 AudioContext，mount 時就能跑）
+  // 1) Mount: 建立 HTMLAudioElement pool + fetch raw buffers for Web Audio
   useEffect(() => {
+    // HTMLAudioElement pool — 每支檔案建 POOL_PER_FILE 個，避免快速連按 contention
+    const pool = []
+    AUDIO_FILES.forEach(src => {
+      for (let i = 0; i < POOL_PER_FILE; i++) {
+        const a = new Audio(src)
+        a.preload = 'auto'
+        pool.push(a)
+      }
+    })
+    audioPoolRef.current = pool
+
+    // 同時 fetch raw ArrayBuffer 供 Web Audio API 用
     AUDIO_FILES.forEach((src, i) => {
       fetch(src)
         .then(r => r.arrayBuffer())
@@ -63,54 +80,71 @@ function App() {
     })
   }, [])
 
-  // 取得或建立 AudioContext（iOS 強制要求在 user gesture 內建立/resume）
-  // 建立後立即把已 fetch 的 raw buffer decode 成 AudioBuffer
-  const getAudioCtx = useCallback(() => {
-    if (!audioCtxRef.current) {
-      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)()
-    }
-    const ctx = audioCtxRef.current
-    if (ctx.state === 'suspended') ctx.resume()
+  // 2) 第一次 user gesture 時 unlock Audio + 初始化 AudioContext
+  const unlockAudio = useCallback(() => {
+    if (audioUnlockedRef.current) return
+    audioUnlockedRef.current = true
 
-    // 把尚未 decode 的 raw buffer 轉成 AudioBuffer
-    rawBuffersRef.current.forEach((raw, i) => {
-      if (raw && !audioBuffersRef.current[i]) {
-        // slice 因為 decodeAudioData 會 detach 原 buffer
-        ctx.decodeAudioData(raw.slice(0))
-          .then(decoded => { audioBuffersRef.current[i] = decoded })
-          .catch(() => { })
-      }
+    // unlock 所有 HTMLAudioElement（iOS 要求 play 必須在 user gesture 內發起過一次）
+    audioPoolRef.current.forEach(a => {
+      a.play().then(() => { a.pause(); a.currentTime = 0 }).catch(() => { })
     })
 
-    return ctx
+    // 建立 AudioContext 並 decode
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)()
+      audioCtxRef.current = ctx
+      if (ctx.state === 'suspended') ctx.resume()
+
+      // 播一個無聲 buffer 解鎖 iOS AudioContext
+      const silent = ctx.createBuffer(1, 1, 22050)
+      const src = ctx.createBufferSource()
+      src.buffer = silent
+      src.connect(ctx.destination)
+      src.start(0)
+
+      // decode 所有 raw buffer
+      rawBuffersRef.current.forEach((raw, i) => {
+        if (raw && !audioBuffersRef.current[i]) {
+          ctx.decodeAudioData(raw.slice(0))
+            .then(decoded => { audioBuffersRef.current[i] = decoded })
+            .catch(() => { })
+        }
+      })
+    } catch { /* AudioContext not supported, HTMLAudioElement pool still works */ }
   }, [])
 
-  // 播放音效：每次建新的 AudioBufferSourceNode（輕量），不會有 contention
+  // 3) 播放音效
   const playSound = useCallback((opts = {}) => {
-    const ctx = getAudioCtx()
-    const bufs = audioBuffersRef.current.filter(Boolean)
+    unlockAudio()
+    const fileIndex = opts.index ?? Math.floor(Math.random() * AUDIO_FILES.length)
+    const rate = opts.rate ?? (0.8 + Math.random() * 0.5)
+    const volume = opts.volume ?? (0.7 + Math.random() * 0.3)
 
-    // fallback：如果 AudioBuffer 還沒 decode 完（第一次按太快），用 HTMLAudioElement 兜底
-    if (!bufs.length) {
-      const src = AUDIO_FILES[opts.index ?? Math.floor(Math.random() * AUDIO_FILES.length)]
-      const fallback = new Audio(src)
-      fallback.playbackRate = opts.rate ?? 1
-      fallback.volume = opts.volume ?? 1
-      fallback.play().catch(() => { })
+    // 優先用 Web Audio API（零延遲，無 contention）
+    const ctx = audioCtxRef.current
+    if (ctx && ctx.state === 'running' && audioBuffersRef.current[fileIndex]) {
+      const source = ctx.createBufferSource()
+      source.buffer = audioBuffersRef.current[fileIndex]
+      source.playbackRate.value = rate
+      const gain = ctx.createGain()
+      gain.gain.value = volume
+      source.connect(gain).connect(ctx.destination)
+      source.start(0)
       return
     }
 
-    const buf = opts.index != null && audioBuffersRef.current[opts.index]
-      ? audioBuffersRef.current[opts.index]
-      : bufs[Math.floor(Math.random() * bufs.length)]
-    const source = ctx.createBufferSource()
-    source.buffer = buf
-    source.playbackRate.value = opts.rate ?? (0.8 + Math.random() * 0.5)
-    const gain = ctx.createGain()
-    gain.gain.value = opts.volume ?? (0.7 + Math.random() * 0.3)
-    source.connect(gain).connect(ctx.destination)
-    source.start(0)
-  }, [getAudioCtx])
+    // Fallback: HTMLAudioElement pool（round-robin 避免 contention）
+    const poolStart = fileIndex * POOL_PER_FILE
+    const idx = poolStart + (audioPoolIndexRef.current++ % POOL_PER_FILE)
+    const audio = audioPoolRef.current[idx]
+    if (audio) {
+      audio.currentTime = 0
+      audio.playbackRate = rate
+      audio.volume = volume
+      audio.play().catch(() => { })
+    }
+  }, [unlockAudio])
 
   // 儲存計數到 localStorage
   useEffect(() => {
@@ -291,7 +325,7 @@ function App() {
 
     if (isSuperMode) return
 
-    getAudioCtx() // 確保 iOS AudioContext 在 user gesture 內被啟動
+    unlockAudio() // 確保 iOS audio 在 user gesture 內被啟動
     setIsPressed(true)
     setIsCharging(true)
     // 用 requestAnimationFrame 確保先 render 出初始狀態（offset=full）再觸發 transition
@@ -307,7 +341,7 @@ function App() {
       createFireworks(true)
       startSuperMode()
     }, 2500)
-  }, [isSuperMode, startSuperMode, createParticles, createFireworks, getAudioCtx])
+  }, [isSuperMode, startSuperMode, createParticles, createFireworks, unlockAudio])
 
   const endLongPress = useCallback((e) => {
     // 觸控裝置上忽略合成的 mouse 事件
@@ -370,11 +404,11 @@ function App() {
   }, [count])
 
   const handleNickname = useCallback((name) => {
-    getAudioCtx() // user gesture → 初始化 AudioContext 並開始 decode
+    unlockAudio() // user gesture → unlock audio for iOS
     setNickname(name)
     localStorage.setItem('hoawa_nickname', name)
     if (count > 0) submitScore(name, count, totalCount)
-  }, [count, totalCount, submitScore, getAudioCtx])
+  }, [count, totalCount, submitScore, unlockAudio])
 
   const openLeaderboard = useCallback(() => {
     fetchScores()
