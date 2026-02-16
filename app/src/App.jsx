@@ -46,39 +46,60 @@ function App() {
 
   const audioCtxRef = useRef(null)
   const audioBuffersRef = useRef([])
+  const rawBuffersRef = useRef([])   // 先存 raw ArrayBuffer，等 user gesture 才 decode
   const buttonRef = useRef(null)
   const clickTimesRef = useRef([])
   const longPressTimer = useRef(null)
   const superModeInterval = useRef(null)
   const isTouchRef = useRef(false)
 
-  // 取得或建立 AudioContext（iOS 需要在 user gesture 後 resume）
+  // 只 fetch raw ArrayBuffer（不需要 AudioContext，mount 時就能跑）
+  useEffect(() => {
+    AUDIO_FILES.forEach((src, i) => {
+      fetch(src)
+        .then(r => r.arrayBuffer())
+        .then(buf => { rawBuffersRef.current[i] = buf })
+        .catch(() => { })
+    })
+  }, [])
+
+  // 取得或建立 AudioContext（iOS 強制要求在 user gesture 內建立/resume）
+  // 建立後立即把已 fetch 的 raw buffer decode 成 AudioBuffer
   const getAudioCtx = useCallback(() => {
     if (!audioCtxRef.current) {
       audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)()
     }
     const ctx = audioCtxRef.current
     if (ctx.state === 'suspended') ctx.resume()
+
+    // 把尚未 decode 的 raw buffer 轉成 AudioBuffer
+    rawBuffersRef.current.forEach((raw, i) => {
+      if (raw && !audioBuffersRef.current[i]) {
+        // slice 因為 decodeAudioData 會 detach 原 buffer
+        ctx.decodeAudioData(raw.slice(0))
+          .then(decoded => { audioBuffersRef.current[i] = decoded })
+          .catch(() => { })
+      }
+    })
+
     return ctx
   }, [])
-
-  // 預載音檔為 AudioBuffer（decode 後的 PCM 存在記憶體，播放零延遲）
-  useEffect(() => {
-    const ctx = getAudioCtx()
-    AUDIO_FILES.forEach((src, i) => {
-      fetch(src)
-        .then(r => r.arrayBuffer())
-        .then(buf => ctx.decodeAudioData(buf))
-        .then(decoded => { audioBuffersRef.current[i] = decoded })
-        .catch(() => { })
-    })
-  }, [getAudioCtx])
 
   // 播放音效：每次建新的 AudioBufferSourceNode（輕量），不會有 contention
   const playSound = useCallback((opts = {}) => {
     const ctx = getAudioCtx()
     const bufs = audioBuffersRef.current.filter(Boolean)
-    if (!bufs.length) return
+
+    // fallback：如果 AudioBuffer 還沒 decode 完（第一次按太快），用 HTMLAudioElement 兜底
+    if (!bufs.length) {
+      const src = AUDIO_FILES[opts.index ?? Math.floor(Math.random() * AUDIO_FILES.length)]
+      const fallback = new Audio(src)
+      fallback.playbackRate = opts.rate ?? 1
+      fallback.volume = opts.volume ?? 1
+      fallback.play().catch(() => { })
+      return
+    }
+
     const buf = opts.index != null && audioBuffersRef.current[opts.index]
       ? audioBuffersRef.current[opts.index]
       : bufs[Math.floor(Math.random() * bufs.length)]
@@ -349,10 +370,11 @@ function App() {
   }, [count])
 
   const handleNickname = useCallback((name) => {
+    getAudioCtx() // user gesture → 初始化 AudioContext 並開始 decode
     setNickname(name)
     localStorage.setItem('hoawa_nickname', name)
     if (count > 0) submitScore(name, count, totalCount)
-  }, [count, totalCount, submitScore])
+  }, [count, totalCount, submitScore, getAudioCtx])
 
   const openLeaderboard = useCallback(() => {
     fetchScores()
