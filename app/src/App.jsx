@@ -55,50 +55,74 @@ function App() {
   const superModeInterval = useRef(null)
   const isTouchRef = useRef(false)
 
-  // 1) Mount: fetch raw buffers for Web Audio
+  // 1) Mount: Initialize AudioContext (suspended) and decode buffers immediately
   useEffect(() => {
-    AUDIO_FILES.forEach((src, i) => {
-      fetch(src)
-        .then(r => r.arrayBuffer())
-        .then(buf => { rawBuffersRef.current[i] = buf })
-        .catch(() => { })
-    })
-  }, [])
-
-  // 2) 第一次 user gesture 時 unlock Audio + 初始化 AudioContext
-  const unlockAudio = useCallback(() => {
-    if (audioUnlockedRef.current) return
-    audioUnlockedRef.current = true
-
-    // 建立 AudioContext 並 decode
     try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)()
-      audioCtxRef.current = ctx
-      if (ctx.state === 'suspended') ctx.resume()
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)()
+      }
 
-      // 播一個無聲 buffer 解鎖 iOS AudioContext
-      const silent = ctx.createBuffer(1, 1, 22050)
-      const src = ctx.createBufferSource()
-      src.buffer = silent
-      src.connect(ctx.destination)
-      src.start(0)
-
-      // decode 所有 raw buffer
-      rawBuffersRef.current.forEach((raw, i) => {
-        if (raw && !audioBuffersRef.current[i]) {
-          ctx.decodeAudioData(raw.slice(0))
-            .then(decoded => { audioBuffersRef.current[i] = decoded })
-            .catch(() => { })
-        }
+      AUDIO_FILES.forEach((src, i) => {
+        fetch(src)
+          .then(r => r.arrayBuffer())
+          .then(buf => {
+            rawBuffersRef.current[i] = buf
+            if (audioCtxRef.current) {
+              return audioCtxRef.current.decodeAudioData(buf.slice(0))
+                .then(decoded => {
+                  audioBuffersRef.current[i] = decoded
+                })
+            }
+          })
+          .catch(err => console.warn(`Failed to process ${src}:`, err))
       })
     } catch (e) {
       console.warn("Web Audio API not supported", e)
     }
   }, [])
 
+  // 2) 第一次 user gesture 時 unlock Audio (resume context)
+  const unlockAudio = useCallback(() => {
+    if (audioUnlockedRef.current) return
+    audioUnlockedRef.current = true
+
+    try {
+      const ctx = audioCtxRef.current
+      if (ctx) {
+        if (ctx.state === 'suspended') {
+          ctx.resume()
+        }
+
+        // 播一個無聲 buffer 解鎖 iOS AudioContext
+        const silent = ctx.createBuffer(1, 1, 22050)
+        const src = ctx.createBufferSource()
+        src.buffer = silent
+        src.connect(ctx.destination)
+        src.start(0)
+
+        // 如果有部分 buffer 漏掉 decoding，做最後補救
+        rawBuffersRef.current.forEach((raw, i) => {
+          if (raw && !audioBuffersRef.current[i]) {
+            ctx.decodeAudioData(raw.slice(0))
+              .then(decoded => { audioBuffersRef.current[i] = decoded })
+              .catch(() => { })
+          }
+        })
+      }
+    } catch (e) {
+      console.warn("Error unlocking AudioContext", e)
+    }
+  }, [])
+
   // 3) 播放音效
   const playSound = useCallback((opts = {}) => {
     unlockAudio()
+
+    // 如果 Context 還是 suspended，嘗試再叫醒一次
+    if (audioCtxRef.current?.state === 'suspended') {
+      audioCtxRef.current.resume().catch(() => { })
+    }
+
     const fileIndex = opts.index ?? Math.floor(Math.random() * AUDIO_FILES.length)
     const rate = opts.rate ?? (0.8 + Math.random() * 0.5)
     const volume = opts.volume ?? (0.7 + Math.random() * 0.3)
@@ -106,13 +130,17 @@ function App() {
     // 優先用 Web Audio API（零延遲，無 contention）
     const ctx = audioCtxRef.current
     if (ctx && ctx.state === 'running' && audioBuffersRef.current[fileIndex]) {
-      const source = ctx.createBufferSource()
-      source.buffer = audioBuffersRef.current[fileIndex]
-      source.playbackRate.value = rate
-      const gain = ctx.createGain()
-      gain.gain.value = volume
-      source.connect(gain).connect(ctx.destination)
-      source.start(0)
+      try {
+        const source = ctx.createBufferSource()
+        source.buffer = audioBuffersRef.current[fileIndex]
+        source.playbackRate.value = rate
+        const gain = ctx.createGain()
+        gain.gain.value = volume
+        source.connect(gain).connect(ctx.destination)
+        source.start(0)
+      } catch (e) {
+        console.warn('Failed to play sound', e)
+      }
     }
   }, [unlockAudio])
 
