@@ -43,10 +43,7 @@ function App() {
   const { enabled: notifEnabled, toggleNotification } = useNotification()
   const { scores, loading, myUid, mode: lbMode, submitScore, fetchScores, switchMode } = useLeaderboard()
   const scoreSubmitTimer = useRef(null)
-  // === Audio: HTMLAudioElement pool (fallback) + Web Audio API (primary when ready) ===
-  const POOL_PER_FILE = 3
-  const audioPoolRef = useRef([])        // HTMLAudioElement pool: POOL_PER_FILE * AUDIO_FILES.length
-  const audioPoolIndexRef = useRef(0)    // round-robin index
+  // === Audio: Web Audio API ===
   const audioUnlockedRef = useRef(false)
   const audioCtxRef = useRef(null)
   const audioBuffersRef = useRef([])     // decoded AudioBuffer[]
@@ -58,20 +55,8 @@ function App() {
   const superModeInterval = useRef(null)
   const isTouchRef = useRef(false)
 
-  // 1) Mount: 建立 HTMLAudioElement pool + fetch raw buffers for Web Audio
+  // 1) Mount: fetch raw buffers for Web Audio
   useEffect(() => {
-    // HTMLAudioElement pool — 每支檔案建 POOL_PER_FILE 個，避免快速連按 contention
-    const pool = []
-    AUDIO_FILES.forEach(src => {
-      for (let i = 0; i < POOL_PER_FILE; i++) {
-        const a = new Audio(src)
-        a.preload = 'auto'
-        pool.push(a)
-      }
-    })
-    audioPoolRef.current = pool
-
-    // 同時 fetch raw ArrayBuffer 供 Web Audio API 用
     AUDIO_FILES.forEach((src, i) => {
       fetch(src)
         .then(r => r.arrayBuffer())
@@ -84,11 +69,6 @@ function App() {
   const unlockAudio = useCallback(() => {
     if (audioUnlockedRef.current) return
     audioUnlockedRef.current = true
-
-    // unlock 所有 HTMLAudioElement（iOS 要求 play 必須在 user gesture 內發起過一次）
-    audioPoolRef.current.forEach(a => {
-      a.play().then(() => { a.pause(); a.currentTime = 0 }).catch(() => { })
-    })
 
     // 建立 AudioContext 並 decode
     try {
@@ -111,7 +91,9 @@ function App() {
             .catch(() => { })
         }
       })
-    } catch { /* AudioContext not supported, HTMLAudioElement pool still works */ }
+    } catch (e) {
+      console.warn("Web Audio API not supported", e)
+    }
   }, [])
 
   // 3) 播放音效
@@ -131,18 +113,6 @@ function App() {
       gain.gain.value = volume
       source.connect(gain).connect(ctx.destination)
       source.start(0)
-      return
-    }
-
-    // Fallback: HTMLAudioElement pool（round-robin 避免 contention）
-    const poolStart = fileIndex * POOL_PER_FILE
-    const idx = poolStart + (audioPoolIndexRef.current++ % POOL_PER_FILE)
-    const audio = audioPoolRef.current[idx]
-    if (audio) {
-      audio.currentTime = 0
-      audio.playbackRate = rate
-      audio.volume = volume
-      audio.play().catch(() => { })
     }
   }, [unlockAudio])
 
