@@ -11,7 +11,11 @@ const AUDIO_FILES = [`${BASE}hoawa1.mp3`, `${BASE}hoawa2.mp3`, `${BASE}hoawa3.mp
 const FLOAT_COLORS = ['#ff6b9d', '#ff8a5c', '#ffd93d', '#6bcfff', '#b784ff', '#ff6b6b']
 
 function getToday() {
-  return new Date().toISOString().slice(0, 10)
+  const d = new Date()
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const date = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${date}`
 }
 
 function App() {
@@ -365,8 +369,18 @@ function App() {
     setIsPressed(true)
     setTimeout(() => setIsPressed(false), 400)
 
+    const today = getToday()
+    const savedDate = localStorage.getItem('hoawaCountDate')
+
+    // 檢查是否跨日（應用程式未關閉，直接點擊）
+    if (savedDate !== today) {
+      setCount(1)
+      localStorage.setItem('hoawaCountDate', today)
+    } else {
+      setCount(prev => prev + 1)
+    }
+
     createParticles()
-    setCount(prev => prev + 1)
     setTotalCount(prev => prev + 1)
     setCountBounce(true)
     setTimeout(() => setCountBounce(false), 300)
@@ -376,8 +390,8 @@ function App() {
     if (nickname) {
       clearTimeout(scoreSubmitTimer.current)
       scoreSubmitTimer.current = setTimeout(() => {
-        const daily = parseInt(localStorage.getItem('hoawaCount') || '0', 10) + 1
-        const total = parseInt(localStorage.getItem('hoawaTotalCount') || '0', 10) + 1
+        const daily = parseInt(localStorage.getItem('hoawaCount') || '0', 10)
+        const total = parseInt(localStorage.getItem('hoawaTotalCount') || '0', 10)
         submitScore(nickname, daily, total)
       }, 2000)
     }
