@@ -43,26 +43,33 @@ export function useLeaderboard() {
             const user = await ensureAuth()
             if (user) setMyUid(user.uid)
 
-            const { getDocs, collection, query, orderBy, limit } = await import('firebase/firestore')
+            const { getDocs, collection, query, orderBy, limit, where } = await import('firebase/firestore')
             const db = await getDb()
-            const sortField = currentMode === 'daily' ? 'dailyScore' : 'totalScore'
-            const q = query(
-                collection(db, 'leaderboard'),
-                orderBy(sortField, 'desc'),
-                limit(10)
-            )
-            const snapshot = await getDocs(q)
             const today = getToday()
+
+            let q
+            if (currentMode === 'daily') {
+                // 找出今天的資料，再照分數反向排序
+                q = query(
+                    collection(db, 'leaderboard'),
+                    where('dailyDate', '==', today),
+                    orderBy('dailyScore', 'desc'),
+                    limit(10)
+                )
+            } else {
+                q = query(
+                    collection(db, 'leaderboard'),
+                    orderBy('totalScore', 'desc'),
+                    limit(10)
+                )
+            }
+
+            const snapshot = await getDocs(q)
             const data = snapshot.docs.map(d => ({
                 uid: d.id,
                 ...d.data()
-            })).filter(entry => {
-                // 每日模式只顯示今天的
-                if (currentMode === 'daily') {
-                    return entry.dailyDate === today
-                }
-                return true
-            })
+            }))
+
             setScores(data)
         } catch (err) {
             console.error('Failed to fetch scores:', err)
